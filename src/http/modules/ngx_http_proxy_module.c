@@ -285,6 +285,8 @@ static ngx_conf_post_t  ngx_http_proxy_ssl_conf_command_post =
 
 
 static ngx_conf_enum_t  ngx_http_proxy_http_version[] = {
+    { ngx_string("plain"), NGX_HTTP_VERSION_PLAIN },
+    { ngx_string("0.9"), NGX_HTTP_VERSION_9 },
     { ngx_string("1.0"), NGX_HTTP_VERSION_10 },
     { ngx_string("1.1"), NGX_HTTP_VERSION_11 },
     { ngx_null_string, 0 }
@@ -1410,8 +1412,10 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
 
     /* the request line */
 
-    b->last = ngx_copy(b->last, method.data, method.len);
-    *b->last++ = ' ';
+    if (plcf->http_version != NGX_HTTP_VERSION_PLAIN) {
+        b->last = ngx_copy(b->last, method.data, method.len);
+        *b->last++ = ' ';
+    }
 
     u->uri.data = b->last;
 
@@ -1426,7 +1430,7 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
             b->last = ngx_copy(b->last, ctx->vars.uri.data, ctx->vars.uri.len);
         }
 
-        if (escape) {
+        if (plcf->http_version != NGX_HTTP_VERSION_PLAIN && escape) {
             ngx_escape_uri(b->last, r->uri.data + loc_len,
                            r->uri.len - loc_len, NGX_ESCAPE_URI);
             b->last += r->uri.len - loc_len + escape;
@@ -1442,38 +1446,62 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
         }
     }
 
+    if (plcf->http_version == NGX_HTTP_VERSION_PLAIN && *b->start == '/') {
+        memmove(b->start, b->start + 1, b->last - b->start - 1);
+        b->last--;
+    }
+
     u->uri.len = b->last - u->uri.data;
 
     if (plcf->http_version == NGX_HTTP_VERSION_11) {
         b->last = ngx_cpymem(b->last, ngx_http_proxy_version_11,
-                             sizeof(ngx_http_proxy_version_11) - 1);
+                            sizeof(ngx_http_proxy_version_11) - 1);
 
-    } else {
+    } else if (plcf->http_version == NGX_HTTP_VERSION_10) {
         b->last = ngx_cpymem(b->last, ngx_http_proxy_version,
-                             sizeof(ngx_http_proxy_version) - 1);
+                            sizeof(ngx_http_proxy_version) - 1);
     }
 
-    ngx_memzero(&e, sizeof(ngx_http_script_engine_t));
+    if (plcf->http_version != NGX_HTTP_VERSION_PLAIN
+        && plcf->http_version != NGX_HTTP_VERSION_9)
+    {
+        ngx_memzero(&e, sizeof(ngx_http_script_engine_t));
 
-    e.ip = headers->values->elts;
-    e.pos = b->last;
-    e.request = r;
-    e.flushed = 1;
+        e.ip = headers->values->elts;
+        e.pos = b->last;
+        e.request = r;
+        e.flushed = 1;
 
-    le.ip = headers->lengths->elts;
+        le.ip = headers->lengths->elts;
 
-    while (*(uintptr_t *) le.ip) {
+        while (*(uintptr_t *) le.ip) {
 
-        lcode = *(ngx_http_script_len_code_pt *) le.ip;
-        (void) lcode(&le);
-
-        for (val_len = 0; *(uintptr_t *) le.ip; val_len += lcode(&le)) {
             lcode = *(ngx_http_script_len_code_pt *) le.ip;
-        }
-        le.ip += sizeof(uintptr_t);
+            (void) lcode(&le);
 
-        if (val_len == 0) {
-            e.skip = 1;
+            for (val_len = 0; *(uintptr_t *) le.ip; val_len += lcode(&le)) {
+                lcode = *(ngx_http_script_len_code_pt *) le.ip;
+            }
+            le.ip += sizeof(uintptr_t);
+
+            if (val_len == 0) {
+                e.skip = 1;
+
+                while (*(uintptr_t *) e.ip) {
+                    code = *(ngx_http_script_code_pt *) e.ip;
+                    code((ngx_http_script_engine_t *) &e);
+                }
+                e.ip += sizeof(uintptr_t);
+
+                e.skip = 0;
+
+                continue;
+            }
+
+            code = *(ngx_http_script_code_pt *) e.ip;
+            code((ngx_http_script_engine_t *) &e);
+
+            *e.pos++ = ':'; *e.pos++ = ' ';
 
             while (*(uintptr_t *) e.ip) {
                 code = *(ngx_http_script_code_pt *) e.ip;
@@ -1481,29 +1509,17 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
             }
             e.ip += sizeof(uintptr_t);
 
-            e.skip = 0;
-
-            continue;
+            *e.pos++ = CR; *e.pos++ = LF;
         }
 
-        code = *(ngx_http_script_code_pt *) e.ip;
-        code((ngx_http_script_engine_t *) &e);
-
-        *e.pos++ = ':'; *e.pos++ = ' ';
-
-        while (*(uintptr_t *) e.ip) {
-            code = *(ngx_http_script_code_pt *) e.ip;
-            code((ngx_http_script_engine_t *) &e);
-        }
-        e.ip += sizeof(uintptr_t);
-
-        *e.pos++ = CR; *e.pos++ = LF;
+        b->last = e.pos;
     }
 
-    b->last = e.pos;
 
-
-    if (plcf->upstream.pass_request_headers) {
+    if (plcf->http_version != NGX_HTTP_VERSION_PLAIN
+        && plcf->http_version != NGX_HTTP_VERSION_9
+        && plcf->upstream.pass_request_headers)
+    {
         part = &r->headers_in.headers.part;
         header = part->elts;
 
@@ -1544,7 +1560,7 @@ ngx_http_proxy_create_request(ngx_http_request_t *r)
     /* add "\r\n" at the header end */
     *b->last++ = CR; *b->last++ = LF;
 
-    if (plcf->body_values) {
+    if (plcf->http_version != NGX_HTTP_VERSION_PLAIN && plcf->body_values) {
         e.ip = plcf->body_values->elts;
         e.pos = b->last;
         e.skip = 0;
@@ -1831,16 +1847,15 @@ ngx_http_proxy_process_status_line(ngx_http_request_t *r)
 
 #endif
 
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "upstream sent no valid HTTP/1.0 header");
-
 #if 0
         if (u->accel) {
             return NGX_HTTP_UPSTREAM_INVALID_HEADER;
         }
 #endif
 
-        r->http_version = NGX_HTTP_VERSION_9;
+        u->headers_in.status_n = NGX_HTTP_OK;
+        u->headers_in.status_line.len = 0;
+        u->headers_in.status_line.data = NULL;
         u->state->status = NGX_HTTP_OK;
         u->headers_in.connection_close = 1;
 
