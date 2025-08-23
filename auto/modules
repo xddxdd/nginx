@@ -421,6 +421,18 @@ if [ $HTTP = YES ]; then
 
     ngx_module_type=HTTP
 
+    if [ $HTTP_PLAIN = YES ]; then
+        have=NGX_HTTP_PLAIN . auto/have
+        ngx_module_name=
+        ngx_module_incs=
+        ngx_module_deps=
+        ngx_module_srcs=
+        ngx_module_libs=
+        ngx_module_link=$HTTP_PLAIN
+
+        . auto/module
+    fi
+
     if [ $HTTP_V2 = YES ]; then
         have=NGX_HTTP_V2 . auto/have
 

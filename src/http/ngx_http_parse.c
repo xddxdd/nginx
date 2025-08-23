@@ -143,6 +143,21 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
         case sw_start:
             r->request_start = p;
 
+#if (NGX_HTTP_PLAIN)
+            if (r->plain_request) {
+                // Plain request starts with URL slash we injected
+                r->method = NGX_HTTP_GET;
+                r->uri_start = p;
+
+                if (ch != '/') {
+                    return NGX_HTTP_PARSE_INVALID_REQUEST;
+                }
+
+                state = sw_after_slash_in_uri;
+                break;
+            }
+#endif
+
             if (ch == CR || ch == LF) {
                 break;
             }
@@ -484,6 +499,13 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
 
             switch (ch) {
             case ' ':
+#if (NGX_HTTP_PLAIN)
+                if (r->plain_request) {
+                    // Allow spaces in plain request URL, use default behavior
+                    state = sw_check_uri;
+                    break;
+                }
+#endif
                 r->uri_end = p;
                 state = sw_http_09;
                 break;
@@ -557,6 +579,12 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
                 r->uri_ext = p + 1;
                 break;
             case ' ':
+#if (NGX_HTTP_PLAIN)
+                if (r->plain_request) {
+                    // Allow spaces in plain request URL, use default behavior
+                    break;
+                }
+#endif
                 r->uri_end = p;
                 state = sw_http_09;
                 break;
@@ -607,6 +635,12 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
 
             switch (ch) {
             case ' ':
+#if (NGX_HTTP_PLAIN)
+                if (r->plain_request) {
+                    // Allow spaces in plain request URL, use default behavior
+                    break;
+                }
+#endif
                 r->uri_end = p;
                 state = sw_http_09;
                 break;
@@ -800,6 +834,17 @@ done:
     if (r->request_end == NULL) {
         r->request_end = p;
     }
+
+#if (NGX_HTTP_PLAIN)
+    if (r->plain_request) {
+        /* pretend that HTTP version is 0.9, so no response headers */
+        r->http_version = NGX_HTTP_VERSION_9;
+        r->method = NGX_HTTP_GET;
+        r->state = sw_start;
+
+        return NGX_OK;
+    }
+#endif
 
     r->http_version = r->http_major * 1000 + r->http_minor;
     r->state = sw_start;

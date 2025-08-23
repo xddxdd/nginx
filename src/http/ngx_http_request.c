@@ -420,6 +420,16 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         b->end = b->last + size;
     }
 
+#if (NGX_HTTP_PLAIN)
+    if (hc->addr_conf->plain) {
+        /* inject a slash at request beginning */
+        if (b->last == b->start) {
+            *b->start = '/';
+            b->last++;
+        }
+    }
+#endif
+
     size = b->end - b->last;
 
     n = c->recv(c, b->last, size);
@@ -468,6 +478,13 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     if (hc->proxy_protocol) {
         hc->proxy_protocol = 0;
 
+#if (NGX_HTTP_PLAIN)
+        if (hc->addr_conf->plain) {
+            /* the first byte is our injected slash, skip it */
+            b->pos++;
+        }
+#endif
+
         p = ngx_proxy_protocol_read(c, b->pos, b->last);
 
         if (p == NULL) {
@@ -476,6 +493,14 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         }
 
         b->pos = p;
+
+#if (NGX_HTTP_PLAIN)
+        if (hc->addr_conf->plain) {
+            /* re-inject the slash */
+            b->pos = p - 1;
+            *b->pos = '/';
+        }
+#endif
 
         if (b->pos == b->last) {
             c->log->action = "waiting for request";
@@ -653,6 +678,10 @@ ngx_http_alloc_request(ngx_connection_t *c)
     r->http_state = NGX_HTTP_READING_REQUEST_STATE;
 
     r->log_handler = ngx_http_log_error_handler;
+
+#if (NGX_HTTP_PLAIN)
+    r->plain_request = hc->addr_conf->plain;
+#endif
 
     return r;
 }
@@ -1125,6 +1154,21 @@ ngx_http_process_request_line(ngx_event_t *rev)
 
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0,
                            "http request line: \"%V\"", &r->request_line);
+
+#if (NGX_HTTP_PLAIN)
+            if (r->plain_request) {
+                r->method_name.len = 3;
+                r->method_name.data = (u_char*) "GET";
+
+                if (ngx_http_process_request_uri(r) != NGX_OK) {
+                    break;
+                }
+
+                ngx_http_process_request(r);
+
+                break;
+            }
+#endif
 
             r->method_name.len = r->method_end - r->request_start + 1;
             r->method_name.data = r->request_line.data;
