@@ -158,6 +158,21 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
             }
 #endif
 
+#if (NGX_HTTP_GEMINI)
+            if (r->gemini_request) {
+                /* Gemini request starts with gemini:// URI */
+                r->method = NGX_HTTP_GET;
+
+                if (ch != 'g' && ch != 'G') {
+                    return NGX_HTTP_PARSE_INVALID_REQUEST;
+                }
+
+                r->schema_start = p;
+                state = sw_schema;
+                break;
+            }
+#endif
+
             if (ch == CR || ch == LF) {
                 break;
             }
@@ -361,6 +376,18 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
             break;
 
         case sw_host_start:
+
+#if (NGX_HTTP_GEMINI)
+            /* Verify gemini:// schema for gemini requests */
+            if (r->gemini_request) {
+                if (r->schema_end - r->schema_start != 6
+                    || ngx_strncasecmp(r->schema_start,
+                                       (u_char *) "gemini", 6) != 0)
+                {
+                    return NGX_HTTP_PARSE_INVALID_REQUEST;
+                }
+            }
+#endif
 
             r->host_start = p;
 

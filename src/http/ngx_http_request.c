@@ -683,6 +683,10 @@ ngx_http_alloc_request(ngx_connection_t *c)
     r->plain_request = hc->addr_conf->plain;
 #endif
 
+#if (NGX_HTTP_GEMINI)
+    r->gemini_request = hc->addr_conf->gemini;
+#endif
+
     return r;
 }
 
@@ -1159,6 +1163,22 @@ ngx_http_process_request_line(ngx_event_t *rev)
             if (r->plain_request) {
                 r->method_name.len = 3;
                 r->method_name.data = (u_char*) "GET";
+
+                if (ngx_http_process_request_uri(r) != NGX_OK) {
+                    break;
+                }
+
+                ngx_http_process_request(r);
+
+                break;
+            }
+#endif
+
+#if (NGX_HTTP_GEMINI)
+            if (r->gemini_request) {
+                r->method_name.len = 3;
+                r->method_name.data = (u_char *) "GET";
+                r->http_version = NGX_HTTP_VERSION_GEMINI;
 
                 if (ngx_http_process_request_uri(r) != NGX_OK) {
                     break;

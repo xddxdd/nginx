@@ -433,6 +433,18 @@ if [ $HTTP = YES ]; then
         . auto/module
     fi
 
+    if [ $HTTP_GEMINI = YES ]; then
+        have=NGX_HTTP_GEMINI . auto/have
+        ngx_module_name=
+        ngx_module_incs=
+        ngx_module_deps=
+        ngx_module_srcs=
+        ngx_module_libs=
+        ngx_module_link=$HTTP_GEMINI
+
+        . auto/module
+    fi
+
     if [ $HTTP_V2 = YES ]; then
         have=NGX_HTTP_V2 . auto/have
 

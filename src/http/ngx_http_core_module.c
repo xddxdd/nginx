@@ -4178,6 +4178,18 @@ ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 #endif
         }
 
+        if (ngx_strcmp(value[n].data, "gemini") == 0) {
+#if (NGX_HTTP_GEMINI)
+            lsopt.gemini = 1;
+            continue;
+#else
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                               "the \"gemini\" parameter requires "
+                               "ngx_http_gemini_module");
+            return NGX_CONF_ERROR;
+#endif
+        }
+
         if (ngx_strcmp(value[n].data, "ssl") == 0) {
 #if (NGX_HTTP_SSL)
             lsopt.ssl = 1;
@@ -4364,6 +4376,12 @@ ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
             return "\"proxy_protocol\" parameter is incompatible with \"quic\"";
         }
     }
+
+#if (NGX_HTTP_GEMINI)
+    if (lsopt.gemini && !lsopt.ssl) {
+        return "the \"gemini\" parameter requires \"ssl\" parameter";
+    }
+#endif
 
     for (n = 0; n < u.naddrs; n++) {
 

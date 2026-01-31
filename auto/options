@@ -60,6 +60,7 @@ HTTP_CACHE=YES
 HTTP_CHARSET=YES
 HTTP_GZIP=YES
 HTTP_PLAIN=NO
+HTTP_GEMINI=NO
 HTTP_SSL=NO
 HTTP_V2=NO
 HTTP_V3=NO
@@ -237,6 +238,7 @@ $0: warning: the \"--with-ipv6\" option is deprecated"
         --http-scgi-temp-path=*)         NGX_HTTP_SCGI_TEMP_PATH="$value" ;;
 
         --with-http_plain_module)        HTTP_PLAIN=YES             ;;
+        --with-http_gemini_module)       HTTP_GEMINI=YES            ;;
         --with-http_ssl_module)          HTTP_SSL=YES               ;;
         --with-http_v2_module)           HTTP_V2=YES                ;;
         --with-http_v3_module)           HTTP_V3=YES                ;;
@@ -459,6 +461,7 @@ cat << END
   --without-quic_bpf_module          disable ngx_quic_bpf_module
 
   --with-http_plain_module           enable ngx_http_plain_module
+  --with-http_gemini_module          enable ngx_http_gemini_module
   --with-http_ssl_module             enable ngx_http_ssl_module
   --with-http_v2_module              enable ngx_http_v2_module
   --with-http_v3_module              enable ngx_http_v3_module

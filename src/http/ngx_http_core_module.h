@@ -79,6 +79,9 @@ typedef struct {
 #if (NGX_HTTP_PLAIN)
     unsigned                   plain:1;
 #endif
+#if (NGX_HTTP_GEMINI)
+    unsigned                   gemini:1;
+#endif
 #if (NGX_HAVE_INET6)
     unsigned                   ipv6only:1;
 #endif
@@ -245,6 +248,9 @@ struct ngx_http_addr_conf_s {
     unsigned                   quic:1;
 #if (NGX_HTTP_PLAIN)
     unsigned                   plain:1;
+#endif
+#if (NGX_HTTP_GEMINI)
+    unsigned                   gemini:1;
 #endif
     unsigned                   proxy_protocol:1;
 };

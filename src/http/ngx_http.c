@@ -1238,6 +1238,9 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
 #if (NGX_HTTP_PLAIN)
     ngx_uint_t             plain;
 #endif
+#if (NGX_HTTP_GEMINI)
+    ngx_uint_t             gemini;
+#endif
 #if (NGX_HTTP_SSL)
     ngx_uint_t             ssl;
 #endif
@@ -1280,6 +1283,9 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
 
 #if (NGX_HTTP_PLAIN)
         plain = lsopt->plain || addr[i].opt.plain;
+#endif
+#if (NGX_HTTP_GEMINI)
+        gemini = lsopt->gemini || addr[i].opt.gemini;
 #endif
 #if (NGX_HTTP_SSL)
         ssl = lsopt->ssl || addr[i].opt.ssl;
@@ -1377,6 +1383,9 @@ ngx_http_add_addresses(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
         addr[i].opt.proxy_protocol = proxy_protocol;
 #if (NGX_HTTP_PLAIN)
         addr[i].opt.plain = plain;
+#endif
+#if (NGX_HTTP_GEMINI)
+        addr[i].opt.gemini = gemini;
 #endif
 #if (NGX_HTTP_SSL)
         addr[i].opt.ssl = ssl;
@@ -1924,6 +1933,9 @@ ngx_http_add_addrs(ngx_conf_t *cf, ngx_http_port_t *hport,
 #if (NGX_HTTP_PLAIN)
         addrs[i].conf.plain = addr[i].opt.plain;
 #endif
+#if (NGX_HTTP_GEMINI)
+        addrs[i].conf.gemini = addr[i].opt.gemini;
+#endif
 #if (NGX_HTTP_SSL)
         addrs[i].conf.ssl = addr[i].opt.ssl;
 #endif
@@ -1994,6 +2006,9 @@ ngx_http_add_addrs6(ngx_conf_t *cf, ngx_http_port_t *hport,
         addrs6[i].conf.default_server = addr[i].default_server;
 #if (NGX_HTTP_PLAIN)
         addrs6[i].conf.plain = addr[i].opt.plain;
+#endif
+#if (NGX_HTTP_GEMINI)
+        addrs6[i].conf.gemini = addr[i].opt.gemini;
 #endif
 #if (NGX_HTTP_SSL)
         addrs6[i].conf.ssl = addr[i].opt.ssl;

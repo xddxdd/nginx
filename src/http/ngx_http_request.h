@@ -20,6 +20,7 @@
 #define NGX_HTTP_LINGERING_BUFFER_SIZE     4096
 
 #define NGX_HTTP_VERSION_PLAIN             1
+#define NGX_HTTP_VERSION_GEMINI            2
 #define NGX_HTTP_VERSION_9                 9
 #define NGX_HTTP_VERSION_10                1000
 #define NGX_HTTP_VERSION_11                1001
@@ -571,6 +572,10 @@ struct ngx_http_request_s {
 
 #if (NGX_HTTP_PLAIN)
     unsigned                          plain_request:1;
+#endif
+
+#if (NGX_HTTP_GEMINI)
+    unsigned                          gemini_request:1;
 #endif
 
     /* used to parse HTTP headers */

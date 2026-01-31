@@ -14,6 +14,10 @@
 static ngx_int_t ngx_http_header_filter_init(ngx_conf_t *cf);
 static ngx_int_t ngx_http_header_filter(ngx_http_request_t *r);
 
+#if (NGX_HTTP_GEMINI)
+static ngx_int_t ngx_http_gemini_header_filter(ngx_http_request_t *r);
+#endif
+
 
 static ngx_http_module_t  ngx_http_header_filter_module_ctx = {
     NULL,                                  /* preconfiguration */
@@ -153,6 +157,122 @@ ngx_http_header_out_t  ngx_http_headers_out[] = {
 };
 
 
+#if (NGX_HTTP_GEMINI)
+static ngx_int_t
+ngx_http_gemini_header_filter(ngx_http_request_t *r)
+{
+    size_t                     gemini_len;
+    ngx_buf_t                 *gb;
+    ngx_chain_t                gemini_out;
+    u_char                    *gp;
+    ngx_uint_t                 gemini_status;
+    ngx_str_t                  gemini_meta;
+
+    /* Map HTTP status to Gemini status */
+    if (r->headers_out.status >= 200 && r->headers_out.status < 300) {
+        gemini_status = 20;  /* SUCCESS */
+        if (r->headers_out.content_type.len) {
+            gemini_meta = r->headers_out.content_type;
+        } else {
+            ngx_str_set(&gemini_meta, "text/gemini");
+        }
+
+    } else if (r->headers_out.status == 301
+               || r->headers_out.status == 308)
+    {
+        gemini_status = 31;  /* REDIRECT - PERMANENT */
+        if (r->headers_out.location && r->headers_out.location->value.len) {
+            gemini_meta = r->headers_out.location->value;
+        } else {
+            ngx_str_set(&gemini_meta, "/");
+        }
+
+    } else if (r->headers_out.status >= 300
+               && r->headers_out.status < 400)
+    {
+        gemini_status = 30;  /* REDIRECT - TEMPORARY */
+        if (r->headers_out.location && r->headers_out.location->value.len) {
+            gemini_meta = r->headers_out.location->value;
+        } else {
+            ngx_str_set(&gemini_meta, "/");
+        }
+
+    } else if (r->headers_out.status == 400) {
+        gemini_status = 59;  /* BAD REQUEST */
+        ngx_str_set(&gemini_meta, "Bad Request");
+
+    } else if (r->headers_out.status == 401
+               || r->headers_out.status == 403)
+    {
+        gemini_status = 60;  /* CLIENT CERTIFICATE REQUIRED */
+        ngx_str_set(&gemini_meta, "Client Certificate Required");
+
+    } else if (r->headers_out.status == 404) {
+        gemini_status = 51;  /* NOT FOUND */
+        ngx_str_set(&gemini_meta, "Not Found");
+
+    } else if (r->headers_out.status == 410) {
+        gemini_status = 52;  /* GONE */
+        ngx_str_set(&gemini_meta, "Gone");
+
+    } else if (r->headers_out.status >= 400
+               && r->headers_out.status < 500)
+    {
+        gemini_status = 59;  /* BAD REQUEST */
+        ngx_str_set(&gemini_meta, "Bad Request");
+
+    } else if (r->headers_out.status == 503) {
+        gemini_status = 44;  /* SLOW DOWN */
+        /*
+         * Hardcoded 5-second retry interval. nginx's headers_out doesn't
+         * have a retry_after field, so we cannot use Retry-After header.
+         */
+        ngx_str_set(&gemini_meta, "5");
+
+    } else {
+        gemini_status = 40;  /* TEMPORARY FAILURE */
+        ngx_str_set(&gemini_meta, "Server Error");
+    }
+
+    /* Gemini protocol doesn't support keep-alive */
+    r->keepalive = 0;
+
+    /* For non-success (non-20) responses, don't send body */
+    if (gemini_status != 20) {
+        r->header_only = 1;
+    }
+
+    /* Calculate buffer length: "XX <meta>\r\n" */
+    gemini_len = 2 + 1 + gemini_meta.len + 2;
+
+    gb = ngx_create_temp_buf(r->pool, gemini_len);
+    if (gb == NULL) {
+        return NGX_ERROR;
+    }
+
+    gp = gb->pos;
+    *gp++ = (u_char) ('0' + gemini_status / 10);
+    *gp++ = (u_char) ('0' + gemini_status % 10);
+    *gp++ = ' ';
+    gp = ngx_cpymem(gp, gemini_meta.data, gemini_meta.len);
+    *gp++ = CR;
+    *gp++ = LF;
+    gb->last = gp;
+
+    /* For header-only responses, mark buffer as the last one */
+    if (gemini_status != 20) {
+        gb->last_buf = 1;
+        gb->last_in_chain = 1;
+    }
+
+    gemini_out.buf = gb;
+    gemini_out.next = NULL;
+
+    return ngx_http_write_filter(r, &gemini_out);
+}
+#endif
+
+
 static ngx_int_t
 ngx_http_header_filter(ngx_http_request_t *r)
 {
@@ -178,6 +298,12 @@ ngx_http_header_filter(ngx_http_request_t *r)
     if (r != r->main) {
         return NGX_OK;
     }
+
+#if (NGX_HTTP_GEMINI)
+    if (r->gemini_request) {
+        return ngx_http_gemini_header_filter(r);
+    }
+#endif
 
     if (r->http_version < NGX_HTTP_VERSION_10) {
         return NGX_OK;
