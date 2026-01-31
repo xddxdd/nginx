@@ -1,0 +1,13 @@
+result*
+.gcroots
+.vscode
+.direnv
+nix-function-calls.*
+.pre-commit-config.yaml
+
+flamegraph.svg
+nix.profile
+objs/
+logs/
+test*
+/Makefile
